@@ -1,0 +1,78 @@
+@startuml
+
+actor Клиент
+participant "Веб-сайт" as Site
+participant "Backend API" as Backend
+participant "Внутренний портал" as Portal
+actor "Сотрудник сервиса" as Agent
+participant "Смежная служба" as Service
+
+autonumber 
+== Создание обращения ==
+Клиент -> Site: Оставляет обращение
+activate Site
+Site -> Backend: POST /api/{]clientId}/request\n(данные обращения)
+activate Backend
+Backend -> Portal: Сохранить обращение
+activate Portal
+return: ID обращения
+return: 201 
+return: Визуальное подтверждение
+
+== Обработка обращения ==
+Portal -> Agent: Уведомление о новом обращении
+activate Agent
+
+alt Пометить как спам
+Agent -> Portal: Пометить как спам (func:markAsSpam)
+activate Portal
+Portal -> Backend: PUT /api/{clientId}/requests/{id}/spam n\Обновить статус
+activate Backend
+Backend -> Backend: Статус: Отмечено как спам
+return: 200 
+return: Визуальное подтверждение
+
+
+autonumber 8
+else Ответить клиенту
+Agent -> Portal: Отправить ответ (func:reply)
+activate Portal
+Portal -> Backend: POST /api/{clientId}/requests/{id}/reply\n ответ
+activate Backend
+Backend -> Клиент: Уведомление 
+return: 200 
+return: Подтверждение
+
+autonumber 8
+else Направить в службу
+Agent -> Portal: Выполнить эскалацию (func:escalate)
+activate Portal
+Portal -> Backend: POST /api/{clientId}/requests/{id}/escalate \nЗапрос эскалации
+activate Backend
+Backend -> Backend: Статус = ОЖИДАНИЕ
+Backend -> Service: POST /api/external/requests\n(данные запроса)
+activate Service
+Return: 201 + ExternalID
+Return: 200 
+deactivate Backend
+Portal --> Agent: Статус "Ожидание"
+deactivate Portal
+Service -> Backend: POST /api/callback/requests/{externalId}/reply\n(**результат, возможно вэбхук**)
+activate Backend
+Backend -> Portal: Обновить данные 
+activate Portal
+Portal -> Agent: Уведомление о ответе
+Return: 200 
+Return: 200 
+
+Agent -> Portal: (func:reply)
+activate Portal
+Portal -> Backend: POST /api/{clientId}/requests/{id}/reply \n(финальный ответ)
+activate Backend
+Backend -> Клиент: Уведомление
+return: 200 
+return: Подтверждение
+
+end
+
+@enduml
